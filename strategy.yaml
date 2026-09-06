@@ -1,0 +1,165 @@
+universe:
+  - SPY
+  - QQQ
+  - IWM
+  - AAPL
+  - MSFT
+  - NVDA
+  - GOOGL
+  - AMZN
+  - META
+  - TSLA
+
+session:
+  timezone: America/New_York
+  prime_start: "09:30"
+  prime_end: "10:30"
+  secondary_end: "11:30"
+  trade_after_secondary: false
+
+signals:
+  fast_ema: 9
+  medium_ema: 21
+  slow_ema: 50
+  rsi_period: 14
+  atr_period: 14
+  opening_range_minutes: 15
+  prime_min_score: 80
+  secondary_min_score: 84
+  breakout_ignition_prime_min_score: 72
+  breakout_ignition_secondary_min_score: 77
+  breakout_min_direction_margin: 16
+  minimum_direction_margin: 22
+  breakout_armed_distance_atr: 0.22
+  breakout_max_extension_atr: 0.55
+  breakout_max_age_bars: 2
+  # Selective-session policy tuned after the first live-session review.
+  max_alerts_per_day: 6
+  symbol_cooldown_minutes: 10
+  normal_ready_trades_per_symbol: 1
+  max_ready_trades_per_symbol: 2
+  reentry_cooldown_minutes: 30
+  reentry_min_score: 92
+  reentry_min_edge: 70
+  reentry_new_structure_atr: 0.30
+  profit_lock_after_wins: 3
+  stop_after_wins: 4
+  profit_lock_min_score: 90
+  profit_lock_min_edge: 70
+  profit_lock_allowed_setups:
+    - BREAKOUT_IGNITION
+    - TREND_PULLBACK
+    - FAILED_BREAKOUT
+  # SPY/QQQ/IWM remain tradable, but must pass stricter ETF-specific confirmation.
+  etf_symbols:
+    - SPY
+    - QQQ
+    - IWM
+  etf_prime_min_score: 84
+  etf_secondary_min_score: 88
+  etf_min_directional_edge: 65
+  etf_max_chase_utilization: 0.60
+  etf_min_rvol: 1.25
+  etf_require_trending_regime: true
+  etf_require_5m_15m_alignment: true
+  max_chase_utilization: 0.75
+  regime_filter_enabled: true
+  regime_efficiency_trending_min: 0.45
+  regime_efficiency_choppy_max: 0.35
+  regime_vwap_crosses_choppy_min: 3
+  regime_vwap_crosses_trending_max: 2
+  min_bars_ready: 55
+  min_risk_reward: 1.8
+
+options:
+  min_dte: 0
+  max_dte: 14
+  hard_max_ask: 2.50
+  preferred_max_ask: 2.00
+  min_mid: 0.10
+  max_spread_pct_0dte: 18.0
+  max_spread_pct_1_14dte: 12.0
+  preferred_delta_low: 0.35
+  preferred_delta_high: 0.60
+  strike_window_pct: 0.08
+  max_candidates: 5
+  min_option_score: 62
+
+risk:
+  max_estimated_loss_usd: 200
+  preferred_risk_low_usd: 50
+  premium_caution_pct: 0.10
+  premium_hard_stop_pct: 0.20
+  base_take_profit_pct: 0.20
+  high_take_profit_pct: 0.30
+  high_stretch_take_profit_pct: 0.50
+  strong_take_profit_pct: 0.50
+  strong_stretch_take_profit_pct: 0.75
+  exceptional_primary_take_profit_pct: 0.50
+  exceptional_stretch_take_profit_pct: 1.00
+  one_contract_default: true
+
+macro:
+  default_mode: normal
+  caution_threshold_penalty: 2
+  high_threshold_penalty: 6
+  high_event_minutes_before: 15
+  high_event_minutes_after: 10
+  caution_event_minutes_before: 60
+  caution_event_minutes_after: 30
+  high_news_hold_minutes: 25
+  critical_news_hold_minutes: 45
+
+news:
+  max_dashboard_items: 20
+  telegram_min_impact: HIGH
+  # Push standalone Telegram news only for Magnificent Seven company headlines.
+  telegram_symbols:
+    - AAPL
+    - MSFT
+    - NVDA
+    - GOOGL
+    - AMZN
+    - META
+    - TSLA
+  telegram_symbol_aliases:
+    GOOG: GOOGL
+  headline_dedupe_minutes: 180
+
+ai:
+  # AI is optional by default. Set AI_REQUIRED_FOR_READY=true in .env only after
+  # validating the live AI path. Deterministic READY trades work with AI disabled.
+  required_for_live_ready: false
+  # Optional mode fails open on AI infrastructure errors (timeout/quota/API/schema).
+  # Explicit AI VETO still blocks the trade whenever AI review is enabled.
+  fail_open_on_error: true
+  reject_cooldown_minutes: 10
+  # Logged as review-strength only; never treated as win probability or a READY threshold.
+  minimum_approval_confidence: 0.00
+  post_ai_max_option_move_pct: 0.08
+  # V1.4.2 low-latency AI precheck/cache.
+  armed_precheck_enabled: true
+  armed_precheck_min_score: 62
+  armed_precheck_min_edge: 30
+  armed_precheck_etf_min_score: 76
+  armed_precheck_etf_min_edge: 50
+  precheck_ttl_seconds: 25
+  precheck_error_backoff_seconds: 60
+  trigger_precheck_wait_ms: 150
+  precheck_score_drop_for_micro: 6
+  precheck_edge_drop_for_micro: 10
+  precheck_rvol_drop_fraction_for_micro: 0.25
+  precheck_option_ask_drift_pct_for_micro: 0.06
+  counterfactual_horizon_minutes: 15
+  max_news_items: 5
+  max_upcoming_events: 4
+  news_lookback_minutes: 120
+
+monitoring:
+  trail_min_direction_score: 78
+  trail_min_direction_edge: 18
+  trail_min_rvol: 1.15
+  momentum_fade_edge: 12
+  force_exit_at_session_end: true
+  max_update_history: 20
+  option_poll_seconds: 15

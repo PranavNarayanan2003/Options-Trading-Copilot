@@ -1,0 +1,14 @@
+services:
+  copilot:
+    build: .
+    container_name: ai-options-trading-copilot
+    restart: unless-stopped
+    env_file: [.env]
+    environment:
+      HOST: 0.0.0.0
+      PORT: 8000
+      DATABASE_PATH: /data/alerts.sqlite3
+    ports: ["127.0.0.1:8000:8000"]
+    volumes: ["copilot_data:/data"]
+volumes:
+  copilot_data:

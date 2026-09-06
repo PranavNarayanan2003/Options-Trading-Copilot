@@ -1,0 +1,31 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta name="description" content="Live intraday options signal dashboard with automated market-news and macro-risk awareness." />
+  <title>AI Options Trading Copilot V1.4.2</title>
+  <link rel="stylesheet" href="/static/style.css" />
+</head>
+<body>
+  <div class="page-shell">
+    <header class="topbar">
+      <div><div class="eyebrow">INTRADAY OPTIONS SIGNAL ENGINE</div><h1>AI Options Trading Copilot <span>V1.4.2</span></h1><p>Deterministic signal engine • Webull quote reconciliation • optional low-latency AI review</p></div>
+      <div class="header-status"><span class="status-pill" id="mode">MODE</span><span class="status-pill" id="session">SESSION</span><span class="status-pill" id="quota">0 ALERTS</span></div>
+    </header>
+    <main>
+      <section class="overview-grid">
+        <article class="card risk-card"><div class="card-kicker">AUTOMATIC MARKET RISK</div><div class="risk-line"><span id="riskDot" class="risk-dot"></span><strong id="riskMode">LOADING</strong></div><p id="riskReason" class="subtle">Checking market news and macro calendar…</p><div class="status-row"><span id="newsStatus" class="mini-status">News stream —</span><span id="calendarStatus" class="mini-status">Macro calendar —</span></div></article>
+        <article class="card telegram-card"><div class="card-kicker">TELEGRAM ALERTS</div><h2>Get the same trade plan on your phone</h2><p class="subtle">Anyone can subscribe to the bot. No personal chat ID needs to be added to the server configuration.</p><div class="telegram-actions"><a id="telegramLink" class="primary-btn disabled" href="#" target="_blank" rel="noopener">Open Telegram bot</a><span id="subscriberCount" class="subscriber-count">0 subscribers</span></div><small>Send <b>/start</b> to subscribe and <b>/stop</b> to unsubscribe.</small></article>
+        <article class="card safety-card"><div class="card-kicker">REVIEW MODE</div><h2>AI is optional</h2><p class="subtle">The deterministic engine can issue READY trades by itself. When AI review is enabled, an explicit VETO blocks the trade; API/time-out failures do not block in the default optional mode. Strict AI mode can be enabled later.</p><div class="status-row"><span id="aiStatus" class="mini-status">AI gate —</span><span id="webullStatus" class="mini-status">Webull —</span><span class="mini-status good">Execution OFF</span></div></article>
+      </section>
+      <section class="section-block"><div class="section-heading"><div><div class="eyebrow">EVENT AWARENESS</div><h2>Macro calendar & market-moving headlines</h2></div><span>News can raise risk; it never creates a trade by itself.</span></div><div class="intelligence-grid"><article class="card"><div class="card-kicker">NEXT 24 HOURS</div><div id="events" class="event-list"><div class="empty">Loading scheduled events…</div></div></article><article class="card"><div class="card-kicker">LATEST RELEVANT NEWS</div><div id="news" class="news-list"><div class="empty">Loading market news…</div></div></article></div></section>
+      <section class="section-block"><div class="section-heading"><div><div class="eyebrow">10-SYMBOL UNIVERSE</div><h2>Live scanner</h2></div><span>ARMED = pressure near trigger • TRIGGERED = first breakout window • EXTENDED = no-chase</span></div><div id="scanner" class="scanner-grid"></div></section>
+      <section class="section-block"><div class="section-heading"><div><div class="eyebrow">ACTIONABLE SETUPS</div><h2>Trade plans</h2></div><span>Qualifying READY setups • 09:30–11:30 ET • AI optional • duplicate/cooldown protection remains active</span></div><div id="alerts" class="alerts-stack"></div></section>
+      <section class="section-block"><div class="section-heading"><div><div class="eyebrow">AFTER THE ALERT</div><h2>Live recommendation monitors</h2></div><span>Technical invalidation takes priority over fixed premium percentages.</span></div><div id="tracked" class="alerts-stack"></div></section>
+    </main>
+    <footer><strong>Risk notice:</strong> This is a research/recommendation tool, not a guarantee of profit. Market-data feeds can differ from executable broker quotes.</footer>
+  </div>
+  <script src="/static/app.js"></script>
+</body>
+</html>
