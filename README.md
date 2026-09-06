@@ -1,197 +1,549 @@
-# AI Options Trading Copilot V1.4.2
+# Real-Time Options Trading Assistant
 
-Cloud-ready, recommendation-only intraday options assistant.
+A real-time intraday options trading assistant built in Python that processes live market data, technical indicators, market structure, news, and option-chain data to identify and monitor high-conviction CALL and PUT opportunities.
+
+The system combines a deterministic quantitative signal engine with option-contract selection, dynamic risk management, Telegram alerts, an interactive dashboard, optional Webull quote reconciliation, and optional AI-based final verification.
+
+> **Recommendation-only system:** The application does not automatically place broker orders.
+
+---
+
+## Overview
+
+The assistant continuously monitors:
+
+* SPY
+* QQQ
+* IWM
+* AAPL
+* MSFT
+* NVDA
+* GOOGL
+* AMZN
+* META
+* TSLA
+
+It evaluates market conditions in real time and only generates a trade recommendation when a setup satisfies its technical, market-regime, option-quality, risk, and freshness requirements.
+
+A recommendation includes the specific option contract to consider, together with entry and risk-management information.
+
+Example output:
 
 ```text
-Alpaca stock/options/news
-        ↓
-deterministic technical + regime + ETF + risk engine
-        ↓
-ARMED setup appears
-        ↓
-non-blocking AI precheck + likely contract/Webull quote
-        ↓
-short-lived cached review + feature fingerprint
-        ↓
-TRIGGERED setup passes all deterministic gates
-        ↓
-exact option selection + Webull quote reconciliation
-        ↓
-reuse cached AI approval if materially unchanged
-        OR tiny MICRO review if context changed/expired
-        OR compact FULL review if no precheck existed
-        ↓
-post-review underlying + option freshness revalidation
-        ↓
-READY dashboard + Telegram + live trade monitor
+NVDA CALL — HIGH
+
+BUY TO OPEN
+NVDA 195 CALL
+Expiration: Sep 11
+DTE: 4
+
+Reference Entry: $1.72
+
+TP1: $2.24
+Stretch Target: $2.58
+Caution: $1.55
+Hard Premium Stop: $1.38
+
+Technical Invalidation: $193.84
+Do Not Chase Above: $195.67
 ```
 
-**No broker orders are placed.** `ENABLE_BROKER_EXECUTION=false` remains the safety default and no Webull order-submission method exists.
+---
 
-## V1.4.2 key behavior
+## Architecture
 
-- Python remains the only signal generator and owns all hard entry/risk rules.
-- AI begins contextual analysis while a promising breakout is still `ARMED`; no ARMED notification is sent.
-- ARMED AI approvals are cached for 25 seconds by default and tied to a material feature fingerprint.
-- If the trigger arrives with the same material context and likely option contract, the cached AI approval is reused with no trigger-time AI round-trip.
-- If material context changed or the cache expired, only a compact `MICRO` change-review is sent to AI.
-- If a setup jumps directly to `TRIGGERED` with no usable precheck, a compact `FULL` review is used.
-- AI responses are deliberately tiny: `APPROVE/VETO`, fixed reason code, short reason and review-strength.
-- `confidence` is **review-strength only**. It is not a win probability and is no longer a hard READY threshold.
-- Default OpenAI reasoning effort is `none` for the latency baseline. All actual AI latency is recorded for later comparison with `low` if desired.
-- OpenAI and Webull reuse persistent HTTP keep-alive clients.
-- After approval, the bot still refreshes the underlying and exact option quote before Telegram; stale/chased trades are rejected.
-- AI-vetoed deterministic trades are tracked internally as silent research counterfactuals for outcome comparison. They never appear as alerts, trackers or Telegram messages.
-- Alpaca discovers/ranks contracts; Webull can provide the selected exact OCC contract's live bid/ask.
-- SPY, QQQ and IWM remain tradable but pass stricter ETF-specific confirmation.
-- Standalone Telegram news pushes remain MAG 7 only; macro/general news still affects internal risk and AI context.
-
-See `CHANGELOG_V1.4.2.md`, `MIGRATION_V1.4.0_TO_V1.4.2.md`, and `AI_WEBULL_SETUP.md`.
-
-## Current trading profile
-
-- Universe: SPY, QQQ, IWM, AAPL, MSFT, NVDA, GOOGL, AMZN, META, TSLA.
-- PRIME: 09:30–10:30 ET.
-- SECONDARY: 10:30–11:30 ET.
-- No new setup at/after 11:30 ET.
-- Long calls/puts only.
-- 0–14 DTE.
-- Hard option ask ceiling $2.50; <= $2 preferred.
-- Maximum 6 READY recommendations/session.
-- Profit-lock after 3 completed winners; stop new recommendations after 4 completed winners.
-- One normal trade per ticker, exceptional re-entry only after configured reset rules.
-- Technical invalidation has priority over the premium hard-risk cap.
-
-## ETF-specific filter
-
-SPY/QQQ/IWM must pass the normal rules plus:
-
-- PRIME evidence >= 84;
-- SECONDARY evidence >= 88;
-- directional edge >= 65;
-- RVOL >= 1.25x;
-- `TRENDING` market regime;
-- aligned 5m and 15m trend;
-- <60% chase utilization.
-
-## Low-latency AI verification
-
-`strategy.yaml` defaults include:
-
-```yaml
-ai:
-  required_for_live_ready: false
-  fail_open_on_error: true
-  reject_cooldown_minutes: 10
-  minimum_approval_confidence: 0.00
-  post_ai_max_option_move_pct: 0.08
-
-  armed_precheck_enabled: true
-  armed_precheck_min_score: 62
-  armed_precheck_min_edge: 30
-  armed_precheck_etf_min_score: 76
-  armed_precheck_etf_min_edge: 50
-  precheck_ttl_seconds: 25
-  trigger_precheck_wait_ms: 350
-
-  precheck_score_drop_for_micro: 6
-  precheck_edge_drop_for_micro: 10
-  precheck_rvol_drop_fraction_for_micro: 0.25
-  precheck_option_ask_drift_pct_for_micro: 0.06
-  counterfactual_horizon_minutes: 15
+```text
+                 LIVE MARKET DATA
+                        │
+             ┌──────────┴──────────┐
+             │                     │
+          Alpaca                 News
+             │                     │
+             └──────────┬──────────┘
+                        ▼
+               MARKET STATE ENGINE
+                        │
+        EMA / VWAP / RSI / MACD / ATR
+        RVOL / volume / market structure
+        opening range / support / resistance
+        1m / 5m / 15m trend
+                        │
+                        ▼
+               SIGNAL SCORING ENGINE
+                        │
+          CALL score ↔ PUT score
+                        │
+                        ▼
+               SETUP / REGIME FILTERS
+                        │
+          breakout freshness
+          trend alignment
+          ETF-specific confirmation
+          chop detection
+          no-chase filtering
+          macro/event risk
+                        │
+                        ▼
+                OPTION SELECTION
+                        │
+          expiration / strike / DTE
+          liquidity / spread / delta
+          option-quality scoring
+                        │
+                        ▼
+              WEBULL RECONCILIATION
+                   (optional)
+                        │
+                        ▼
+                 AI VERIFICATION
+                   (optional)
+                        │
+                        ▼
+                FINAL FRESHNESS CHECK
+                        │
+                        ▼
+                     READY
+                        │
+             ┌──────────┴──────────┐
+             ▼                     ▼
+         Telegram              Dashboard
+             │
+             ▼
+       Live Trade Monitor
 ```
 
-Recommended live `.env`:
+---
+
+## Key Features
+
+### Real-Time Technical Analysis
+
+The signal engine processes live one-minute market data and evaluates:
+
+* EMA 9 / 21 / 50
+* VWAP
+* RSI
+* MACD and momentum acceleration
+* ATR
+* Relative volume
+* Volume acceleration
+* Opening-range levels
+* Recent highs and lows
+* Support and resistance
+* 1-minute, 5-minute and 15-minute trend alignment
+
+---
+
+### Multi-Setup Signal Engine
+
+The assistant detects several intraday trading structures, including:
+
+* Breakout ignition
+* EMA/VWAP momentum
+* Opening-range breakouts
+* VWAP reclaim and rejection
+* Trend pullbacks
+* Support/resistance reversals
+* Failed breakouts
+
+Each potential CALL and PUT receives an independent evidence score before additional quality filters are applied.
+
+---
+
+### Market Regime Detection
+
+The system attempts to distinguish between:
+
+```text
+TRENDING
+NEUTRAL
+CHOPPY
+```
+
+using higher-timeframe movement, trend efficiency and repeated VWAP rotation.
+
+Momentum and breakout setups can therefore be suppressed when the market is behaving more like a range than a trend.
+
+---
+
+### ETF-Specific Filtering
+
+SPY, QQQ and IWM remain fully tradable but require stronger confirmation than individual equities.
+
+ETF setups require:
+
+* higher minimum evidence scores;
+* stronger directional separation;
+* sufficient relative volume;
+* TRENDING market regime;
+* aligned 5-minute and 15-minute direction;
+* fresher entries with stricter no-chase requirements.
+
+---
+
+### Exact Option Contract Selection
+
+Once an underlying setup qualifies, the assistant searches available option contracts and evaluates:
+
+* CALL or PUT direction
+* Strike
+* Expiration
+* 0–14 DTE
+* Bid / ask
+* Spread
+* Delta
+* Volume
+* Moneyness
+* Contract cost
+* Option-quality score
+
+The selected contract is included directly in the trade recommendation.
+
+---
+
+### Webull Quote Integration
+
+Alpaca is used for market scanning and option discovery.
+
+Webull OpenAPI can optionally provide the latest bid/ask for the exact selected option contract before the recommendation is sent.
+
+```text
+Alpaca
+→ detect setup
+→ identify candidate contracts
+
+Webull
+→ verify selected contract
+→ reconcile bid / ask
+```
+
+This keeps the system aligned with the broker used for manual execution.
+
+---
+
+### Optional AI Final Verification
+
+AI is an optional additional review layer rather than the primary trading engine.
+
+The deterministic system first determines whether a setup qualifies.
+
+If AI verification is enabled, it reviews contextual factors such as:
+
+* CALL vs PUT evidence
+* higher-timeframe trend coherence
+* market regime
+* momentum and volume participation
+* breakout freshness
+* option liquidity
+* macro/event risk
+* relevant company news
+* Webull vs Alpaca quote consistency
+
+The AI can approve or veto an already-qualified setup but cannot generate a trade independently or override the deterministic risk rules.
+
+The assistant can also operate completely without AI:
 
 ```env
-OPENAI_API_KEY=...
-OPENAI_MODEL=gpt-5.6-terra
-OPENAI_REASONING_EFFORT=none
-OPENAI_TIMEOUT_SECONDS=3
-ENABLE_AI_REVIEW=true
+ENABLE_AI_REVIEW=false
 ```
 
-The AI receives a compact feature vector rather than the full raw technical snapshot. It focuses on:
+---
 
-- directional score/edge and setup quality;
-- 1m/5m/15m coherence;
-- regime and recent VWAP rotation;
-- EMA/VWAP structure and momentum direction;
-- RVOL/volume participation;
-- entry freshness/chase context;
-- likely/exact option liquidity and quote source;
-- relevant macro/news/event context.
+### Dynamic Trade Monitoring
 
-Fixed reason codes include `CLEAN_ALIGNMENT`, `HIGHER_TIMEFRAME_CONFLICT`, `CHOP_RISK`, `LATE_ENTRY`, `WEAK_PARTICIPATION`, `EVENT_RISK`, `OPTION_QUALITY`, `QUOTE_CONFLICT`, `MOMENTUM_DIVERGENCE`, and `STRUCTURE_CONFLICT`.
+Once a recommendation becomes active, the assistant continues monitoring:
 
-After approval, the bot refreshes the underlying and exact option quote. It rejects the candidate if the trigger was lost, the no-chase/invalidation boundary was crossed, option quality deteriorated, or the option ask moved >8% during the final review/freshness window.
+* underlying price;
+* EMA/VWAP structure;
+* directional score;
+* momentum;
+* relative volume;
+* technical invalidation;
+* key support/resistance;
+* exact option premium.
 
-## Webull read-only option quotes
+Possible monitoring states include:
 
-```env
-ENABLE_WEBULL_QUOTES=true
-WEBULL_QUOTES_REQUIRED_FOR_READY=false
-WEBULL_APP_KEY=...
-WEBULL_APP_SECRET=...
-WEBULL_API_ENDPOINT=api.webull.com
-WEBULL_ACCESS_TOKEN=
-WEBULL_OPTION_SNAPSHOT_PATH=/market-data/options/snapshots/list
-WEBULL_MAX_QUOTE_AGE_SECONDS=20
+```text
+TRACKING
+CAUTION
+TRAILING
+PROTECT_PROFIT
+TARGET_HIT
+EXIT
 ```
 
-Use `WEBULL_QUOTES_REQUIRED_FOR_READY=true` only after `scripts/check_setup.py` confirms your Webull OpenAPI options quote entitlement works.
+Technical structure takes priority over mechanically waiting for a fixed percentage stop.
 
-Optional owner-position synchronization:
+---
 
-```env
-ENABLE_WEBULL_SYNC=true
-WEBULL_ACCOUNT_ID=...
-WEBULL_POLL_SECONDS=15
+### Risk Management
+
+The system includes:
+
+* technical invalidation levels;
+* approximately -10% premium caution zone;
+* approximately -20% premium hard-risk cap;
+* primary profit targets;
+* stretch targets for stronger setups;
+* no-chase levels;
+* position-monitoring updates.
+
+Recommendations are classified by conviction:
+
+```text
+VALID
+HIGH
+STRONG
+EXCEPTIONAL
 ```
 
-See `WEBULL_SETUP.md`.
+---
 
-## Local Windows setup
+### Selective Session Management
+
+The assistant is designed to prioritize quality over trade frequency.
+
+Current session:
+
+```text
+09:30–10:30 ET   PRIME
+10:30–11:30 ET   SECONDARY
+11:30 onward      NO NEW TRADES
+```
+
+Additional controls include:
+
+* maximum six READY trades per session;
+* profit-lock mode after three completed winners;
+* stop new recommendations after four completed winners;
+* one normal trade per ticker;
+* stricter requirements for repeat entries;
+* per-symbol cooldowns.
+
+---
+
+### News and Macro Awareness
+
+The application integrates:
+
+* Alpaca market news;
+* Federal Reserve feeds;
+* BLS economic-release schedules;
+* optional external economic-calendar data.
+
+News does not create CALL or PUT direction.
+
+Instead, major events can increase the evidence required before a trade is accepted.
+
+Standalone Telegram news notifications are limited to major headlines concerning:
+
+```text
+AAPL
+MSFT
+NVDA
+GOOGL
+AMZN
+META
+TSLA
+```
+
+---
+
+### Telegram Alerts
+
+Telegram is used for actionable trade notifications and material position-management updates.
+
+Multiple users can subscribe using:
+
+```text
+/start
+```
+
+or:
+
+```text
+/subscribe
+```
+
+The system does not send trade notifications for:
+
+* ARMED setups;
+* rejected candidates;
+* stale entries;
+* extended breakouts;
+* research-only setups.
+
+Only actual `READY` recommendations are pushed.
+
+---
+
+### Interactive Dashboard
+
+The FastAPI web application provides a real-time view of:
+
+* monitored symbols;
+* indicator state;
+* CALL / PUT evidence scores;
+* market regime;
+* breakout status;
+* current recommendations;
+* selected option contracts;
+* trade monitoring;
+* news and macro risk.
+
+Local dashboard:
+
+```text
+http://127.0.0.1:8000
+```
+
+---
+
+## Technology Stack
+
+### Backend
+
+* Python
+* FastAPI
+* AsyncIO
+* WebSockets
+* REST APIs
+
+### Data & Integrations
+
+* Alpaca Market Data API
+* Webull OpenAPI
+* Telegram Bot API
+* OpenAI API (optional)
+* Federal Reserve / BLS feeds
+
+### Data & Persistence
+
+* Pandas
+* NumPy
+* SQLite
+
+### Infrastructure
+
+* Docker
+* Docker Compose
+* Linux / cloud deployment
+
+---
+
+## Local Setup
+
+### 1. Clone the repository
+
+```bash
+git clone https://github.com/YOUR_USERNAME/real-time-options-trading-assistant.git
+cd real-time-options-trading-assistant
+```
+
+### 2. Create a virtual environment
+
+Windows:
 
 ```powershell
-cd "C:\path\to\ai-options-trading-copilot-v1.4.2"
 python -m venv .venv
 .\.venv\Scripts\python.exe -m pip install --upgrade pip
 .\.venv\Scripts\python.exe -m pip install -r requirements.txt
+```
+
+### 3. Create the environment file
+
+```powershell
 Copy-Item .env.example .env
 ```
 
-Configure `.env`, then run:
+Add your API credentials to `.env`.
+
+Never commit `.env` to GitHub.
+
+---
+
+## Minimal Configuration
+
+```env
+DATA_MODE=live
+
+ALPACA_API_KEY=
+ALPACA_API_SECRET=
+
+ALPACA_STOCK_FEED=iex
+ALPACA_OPTION_FEED=indicative
+
+ENABLE_TELEGRAM=true
+TELEGRAM_BOT_TOKEN=
+
+ENABLE_NEWS=true
+
+ENABLE_AI_REVIEW=false
+AI_REQUIRED_FOR_READY=false
+AI_FAIL_OPEN_ON_ERROR=true
+
+ENABLE_WEBULL_QUOTES=false
+ENABLE_WEBULL_SYNC=false
+
+ENABLE_BROKER_EXECUTION=false
+```
+
+---
+
+## Run Diagnostics
 
 ```powershell
 .\.venv\Scripts\python.exe scripts\check_setup.py
+```
+
+---
+
+## Run Tests
+
+```powershell
 .\.venv\Scripts\python.exe -m pytest -q
+```
+
+---
+
+## Start the Live Assistant
+
+```powershell
 .\.venv\Scripts\python.exe scripts\run_live.py
 ```
 
-Open `http://127.0.0.1:8000` locally. `/health` should report `version=1.4.2`, `mode=live`, `execution_enabled=false`, plus AI/Webull status fields.
+Open:
 
-## Telegram
+```text
+http://127.0.0.1:8000
+```
 
-One bot token supports multiple subscribers. Users send `/start` or `/subscribe`; chat IDs are stored in SQLite automatically.
+---
 
-Trade notifications are sent only for actual READY recommendations. Rejected/ARMED/EXTENDED/AI-vetoed/stale candidates are not pushed.
+## Research & Performance Logging
 
-Standalone high-impact news pushes are restricted to AAPL, MSFT, NVDA, GOOGL/GOOG, AMZN, META and TSLA.
+The assistant stores detailed observations for later strategy evaluation, including:
 
-## Research logging and AI effectiveness
+* evidence scores;
+* setup type;
+* market regime;
+* directional edge;
+* RVOL;
+* entry freshness;
+* option quality;
+* final outcome;
+* maximum favorable excursion;
+* maximum adverse excursion;
+* AI approval/veto information when enabled.
 
-Signal observations record AI review mode, reason code, actual AI latency, token usage, precheck age, feature fingerprint, material changes, and option/underlying movement during the final verification window.
-
-AI-vetoed candidates are tracked internally for 15 minutes by default using the selected exact contract. This research path is silent and is not exposed as a trade recommendation.
-
-Export:
+Export research data with:
 
 ```powershell
 .\.venv\Scripts\python.exe scripts\export_research_data.py
 ```
 
-The export includes:
+Example outputs:
 
 ```text
 signal_observations.csv
@@ -200,28 +552,73 @@ ai_veto_counterfactuals.csv
 ai_effectiveness_summary.csv
 ```
 
-`ai_effectiveness_summary.csv` compares real AI-approved outcomes with AI-vetoed counterfactual outcomes and labels a cohort `PRELIMINARY` until at least 50 completed samples exist.
+This makes it possible to evaluate whether individual filters or the optional AI layer are actually improving performance rather than relying only on anecdotal results.
 
-## Free cloud deployment
+---
 
-For an always-on deployment without paying for the VM, see `FREE_CLOUD_DEPLOYMENT.md`.
+## Cloud Deployment
 
-The Docker Compose service:
+The project includes:
 
-- persists SQLite under `/data`;
-- uses `restart: unless-stopped`;
-- binds dashboard port 8000 to server localhost only;
-- is intended to run as one live replica.
+```text
+Dockerfile
+docker-compose.yml
+```
 
-Once the cloud instance is live, stop the local live process.
+and is designed to run as a single persistent cloud instance.
 
-## Safety / limitations
+The service can be deployed to a Linux VM so that:
 
-- This is a research/recommendation system, not a guarantee of profit.
-- Evidence score and AI review-strength are not calibrated probabilities of winning.
-- AI can make mistakes; its role is conservative contextual verification, not autonomous trading.
-- The 25-second cache is a latency optimization, not permission to ignore post-review freshness checks.
-- Alpaca Basic IEX is partial-market stock data and Alpaca indicative options are not execution-grade OPRA quotes.
-- Webull OpenAPI market-data permissions/subscriptions are separate from ordinary Webull app quote packages.
-- Even a broker API quote can move before manual order entry.
-- `ENABLE_BROKER_EXECUTION=false` must remain false for the current manual-execution architecture.
+```text
+Laptop off
+VS Code closed
+        ↓
+cloud instance remains active
+        ↓
+market scanner runs
+        ↓
+Telegram alerts continue
+```
+
+SQLite data is stored in a persistent Docker volume and the container uses automatic restart behavior.
+
+---
+
+## Security
+
+The repository intentionally excludes:
+
+```text
+.env
+API credentials
+Telegram tokens
+Webull credentials
+OpenAI credentials
+runtime SQLite databases
+Python virtual environments
+```
+
+Keep API credentials in `.env` or secure server-side environment variables.
+
+---
+
+## Limitations
+
+* The system provides trading research and recommendations, not guaranteed outcomes.
+* Evidence scores are not probabilities of winning.
+* AI review strength is not a probability of winning.
+* Market conditions can change between an alert and manual execution.
+* Free/indicative option feeds may differ from executable broker prices.
+* Webull market-data availability depends on OpenAPI permissions and subscriptions.
+* The current system is designed for manual order execution.
+* Automatic broker order placement is intentionally disabled.
+
+---
+
+## Disclaimer
+
+This project is intended for educational, research and personal analytical use.
+
+It does not constitute financial or investment advice, and historical or simulated performance does not guarantee future results.
+
+Options trading involves significant risk and can result in the loss of the entire premium invested.
